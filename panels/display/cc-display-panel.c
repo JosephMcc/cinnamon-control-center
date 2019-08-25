@@ -71,6 +71,9 @@ struct _CcDisplayPanelPrivate
   guint           focus_id;
   guint           focus_id_hide;
 
+  GSettings      *orientation_settings;
+  GSettings      *scale_settings;
+
   GtkWidget      *panel;
   GtkWidget      *current_monitor_event_box;
   GtkWidget      *current_monitor_label;
@@ -78,7 +81,9 @@ struct _CcDisplayPanelPrivate
   GtkWidget      *primary_button;
   GtkListStore   *resolution_store;
   GtkWidget      *resolution_combo;
+  GtkWidget      *scaling_combo;
   GtkWidget      *rotation_combo;
+  GtkWidget      *rotation_switch;
   GtkWidget      *clone_checkbox;
   GtkWidget      *clone_label;
   GtkWidget      *show_icon_checkbox;
@@ -146,6 +151,11 @@ cc_display_panel_set_property (GObject      *object,
 static void
 cc_display_panel_dispose (GObject *object)
 {
+  CcDisplayPanel *self = CC_DISPLAY_PANEL (object);
+
+  g_clear_object (&self->priv->orientation_settings);
+  g_clear_object (&self->priv->scale_settings);
+
   G_OBJECT_CLASS (cc_display_panel_parent_class)->dispose (object);
 }
 
@@ -2499,11 +2509,14 @@ cc_display_panel_constructor (GType                  gtype,
   CcDisplayPanel *self;
   CcShell *shell;
   GtkWidget *toplevel;
-  gchar *objects[] = {"display-panel", "available_launcher_placement_store", NULL};
+  gchar *objects[] = {"display-panel", "available_launcher_placement_store", "scale_settings_store", NULL};
 
   obj = G_OBJECT_CLASS (cc_display_panel_parent_class)->constructor (gtype, n_properties, properties);
   self = CC_DISPLAY_PANEL (obj);
   self->priv = DISPLAY_PANEL_PRIVATE (self);
+
+  self->priv->orientation_settings = g_settings_new ("org.cinnamon.settings-daemon.peripherals.touchscreen");
+  self->priv->scale_settings = g_settings_new ("org.cinnamon.desktop.interface");
 
   error = NULL;
   self->priv->builder = builder = gtk_builder_new ();
@@ -2553,9 +2566,23 @@ cc_display_panel_constructor (GType                  gtype,
   g_signal_connect (self->priv->resolution_combo, "changed",
                     G_CALLBACK (on_resolution_changed), self);
 
+  self->priv->scaling_combo = WID ("scaling_combo");
+  g_settings_bind (self->priv->scale_settings,
+                   "scaling-factor",
+                   self->priv->scaling_combo,
+                   "active",
+                   G_SETTINGS_BIND_GET | G_SETTINGS_BIND_SET);
+
   self->priv->rotation_combo = WID ("rotation_combo");
   g_signal_connect (self->priv->rotation_combo, "changed",
                     G_CALLBACK (on_rotation_changed), self);
+
+  self->priv->rotation_switch = WID ("rotation_switch");
+  g_settings_bind (self->priv->orientation_settings,
+                   "orientation-lock",
+                   self->priv->rotation_switch,
+                   "active",
+                   G_SETTINGS_BIND_GET | G_SETTINGS_BIND_SET | G_SETTINGS_BIND_INVERT_BOOLEAN);
 
   self->priv->clone_checkbox = WID ("clone_checkbox");
   g_signal_connect (self->priv->clone_checkbox, "toggled",
